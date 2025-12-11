@@ -1,0 +1,103 @@
+:root{
+  --bg:#0f1724;
+  --card:#0b1220;
+  --muted:#9aa6b2;
+  --accent:#6ee7b7;
+  --glass: rgba(255,255,255,0.03);
+  --glass-border: rgba(255,255,255,0.03);
+  --radius: 12px;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:linear-gradient(180deg,#071025 0%, #071a2a 100%);color:#e6eef6}
+.app{display:flex;min-height:100vh;gap:24px;padding:28px}
+
+/* Sidebar */
+.sidebar{
+  width:320px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-radius:14px;padding:18px;box-shadow:0 6px 18px rgba(2,6,23,0.6);border:1px solid var(--glass-border);
+  display:flex;flex-direction:column;gap:14px;flex-shrink:0;
+}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{font-size:28px;background:linear-gradient(90deg,#34d399,#60a5fa);width:48px;height:48px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.title{font-weight:700;font-size:18px;color:#cfeff2}
+.dash-stats{display:flex;gap:12px;justify-content:space-between;margin-top:8px}
+.stat{background:var(--glass);padding:12px;border-radius:10px;border:1px solid var(--glass-border);width:48%;text-align:center;cursor:default}
+.btn-stat{background:transparent;border:0;padding:0}
+.stat-label{font-size:12px;color:var(--muted)}
+.stat-value{font-weight:700;font-size:18px;margin-top:6px;color:var(--accent)}
+
+/* Chart: fix height to prevent infinite extension */
+.chart-card{margin-top:12px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));padding:12px;border-radius:10px;border:1px solid var(--glass-border)}
+.chart-wrap{height:170px; /* fixed container height */
+  display:flex;align-items:center;justify-content:center;overflow:hidden;padding:6px}
+.chart-wrap canvas{width:100% !important; height:100% !important; display:block}
+
+/* Recent list */
+.history-card{margin-top:12px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));padding:12px;border-radius:10px;border:1px solid var(--glass-border)}
+.recent-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;max-height:170px;overflow:auto}
+.recent-list li{display:block}
+.recent-btn{background:transparent;border:0;color:#dff8ee;padding:6px;border-radius:8px;text-align:left;width:100%;cursor:pointer}
+.recent-btn:hover{background:rgba(255,255,255,0.02)}
+
+/* Main content */
+.main{flex:1;display:flex;flex-direction:column;gap:12px}
+.main-header h1{margin:0;font-weight:800;font-size:22px}
+.muted{color:var(--muted);font-size:13px}
+.search-area{display:flex;flex-direction:column;gap:14px}
+.search-card{display:flex;justify-content:space-between;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:12px;border-radius:12px;border:1px solid var(--glass-border)}
+.search-left{flex:1}
+.search-input-wrap{position:relative}
+.search-input-wrap .icon{position:absolute;left:12px;top:12px;color:var(--muted);font-size:18px}
+.search-input-wrap input{width:100%;padding:12px 12px 12px 40px;border-radius:10px;border:1px solid var(--glass-border);background:transparent;color:inherit;font-size:15px}
+.search-right{display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-end;gap:8px;min-width:220px}
+.quick-tags{display:flex;gap:8px;flex-wrap:wrap}
+.tag{background:rgba(255,255,255,0.02);border:1px solid var(--glass-border);padding:8px 10px;border-radius:999px;cursor:pointer}
+.result-count{font-size:13px;color:var(--muted)}
+
+/* Autosuggest */
+.autosuggest{position:absolute;left:4px;right:4px;top:46px;background:linear-gradient(180deg,#06202b,#03111a);border-radius:8px;padding:6px;border:1px solid var(--glass-border);z-index:50}
+.autosuggest .suggest-item{padding:8px;border-radius:6px;cursor:pointer}
+.autosuggest .suggest-item:hover{background:rgba(255,255,255,0.02)}
+.hidden{display:none}
+
+/* Results grid */
+.results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:16px}
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.012), rgba(255,255,255,0.01));border-radius:12px;padding:14px;border:1px solid var(--glass-border);transition:transform 180ms ease, box-shadow 200ms ease;box-shadow: 0 8px 22px rgba(2,6,23,0.6)}
+.card:hover{transform:translateY(-6px);box-shadow:0 18px 40px rgba(2,6,23,0.7)}
+.card-top{display:flex;justify-content:space-between;align-items:start;gap:8px}
+.sym{font-weight:700;color:#e9fff7}
+.badges{display:flex;gap:8px}
+.badge{padding:6px 8px;border-radius:20px;font-size:12px}
+.badge.pill{background:rgba(110,231,183,0.08);color:var(--accent);border:1px solid rgba(110,231,183,0.08)}
+.badge.warn{background:rgba(255,120,120,0.06);color:#ff9b9b;border:1px solid rgba(255,120,120,0.06)}
+.card-body{margin-top:10px;line-height:1.4;color:var(--muted);font-size:14px}
+.adr{margin-top:8px;background:rgba(255,255,255,0.01);padding:8px;border-radius:8px;border:1px dashed rgba(255,255,255,0.02);color:#ffcfcf}
+.card-actions{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}
+.btn{background:transparent;border:1px solid var(--glass-border);padding:8px 10px;border-radius:8px;cursor:pointer;color:inherit}
+.btn.small{padding:6px 8px;font-size:13px}
+.btn-link{background:transparent;border:0;color:var(--muted);cursor:pointer;padding:6px}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(2,6,23,0.6);display:flex;align-items:center;justify-content:center;z-index:200}
+.modal{background:#071826;padding:18px;border-radius:12px;max-width:800px;width:90%;max-height:80vh;overflow:auto;border:1px solid rgba(255,255,255,0.03)}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.modal-body{color:var(--muted);font-size:14px}
+.muted{color:var(--muted)}
+
+/* Responsive */
+@media (max-width:900px){
+  .app{flex-direction:column;padding:18px}
+  .sidebar{width:100%;order:2}
+  .main{order:1}
+  .search-right{align-items:flex-start}
+}
+/* Force hidden overlay (safety) */
+.modal-overlay.hidden { display: none !important; }
+
+/* Ensure modal is above overlay and clickable */
+.modal-overlay { z-index: 1200; }
+.modal { z-index: 1300; pointer-events: auto; }
+
+/* Make sure buttons inside modal are clickable */
+.modal button { pointer-events: auto; }

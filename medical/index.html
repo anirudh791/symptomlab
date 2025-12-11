@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Symptom Search — Dashboard</title>
+
+  <!-- Google font + icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- Your custom styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">🩺</div>
+        <div class="title">SymptomLab</div>
+      </div>
+
+      <div class="dash-section">
+        <div class="dash-stats">
+          <button id="totalSearchesBtn" class="stat btn-stat">
+            <div class="stat-label">Total searches</div>
+            <div id="totalSearches" class="stat-value">0</div>
+          </button>
+          <button id="uniqueSymptomsBtn" class="stat btn-stat">
+            <div class="stat-label">Unique symptoms</div>
+            <div id="uniqueSymptoms" class="stat-value">0</div>
+          </button>
+        </div>
+
+        <div class="chart-card">
+          <div class="card-title">Top searched</div>
+          <div class="chart-wrap">
+            <canvas id="barChart"></canvas>
+          </div>
+        </div>
+
+        <div class="history-card">
+          <div class="card-title">Recent searches</div>
+          <ul id="recentList" class="recent-list"></ul>
+          <button id="clearHistory" class="btn-link">Clear history</button>
+        </div>
+      </div>
+
+      <footer class="sidebar-footer">
+        <small>Not medical advice. Include a disclaimer in production.</small>
+      </footer>
+    </aside>
+
+    <main class="main">
+      <header class="main-header">
+        <h1>Search symptoms & get related info</h1>
+        <p class="muted">Type a symptom (partial words allowed). Data shown from your uploaded dataset.</p>
+      </header>
+
+      <section class="search-area">
+        <div class="search-card">
+          <div class="search-left">
+            <div class="search-input-wrap">
+              <i class='bx bx-search icon'></i>
+              <input id="q" autocomplete="off" placeholder="e.g. headache, cough, fever..." />
+              <div id="autosuggest" class="autosuggest hidden"></div>
+            </div>
+
+            <div class="help muted" style="margin-top:8px">Search uses the local dataset (fast). Results show OTC drug, mode/time and ADRs.</div>
+          </div>
+
+          <div class="search-right">
+            <div class="quick-tags">
+              <button class="tag">fever</button>
+              <button class="tag">cough</button>
+              <button class="tag">headache</button>
+              <button class="tag">stomach</button>
+            </div>
+            <div class="result-count muted" id="resultCount">Type to search</div>
+          </div>
+        </div>
+
+        <div id="results" class="results-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal (hidden by default) -->
+  <div id="modalOverlay" class="modal-overlay hidden" tabindex="-1">
+    <div id="modal" class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 id="modalTitle">Title</h3>
+        <button id="modalClose" class="btn">Close</button>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+    </div>
+  </div>
+
+<script>
+/* ================= Configuration & state ================= */
+const DATA_JSON = "/static/symptoms_data.json"; // dataset location
+const SEARCH_ENDPOINT = "/search"; // fallback server search
+let DATASET = null;
+let autosuggestIndex = [];
+
+/* ================= Utility helpers ================= */
+function escapeHtml(s = "") {
+  return s.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+}
+function qSel(s){ return document.querySelector(s); }
+function qSelAll(s){ return Array.from(document.querySelectorAll(s)); }
+
+/* ================= Load dataset for client-side features ================= */
+async function loadDataset(){
+  try {
+    const r = await fetch(DATA_JSON);
+    if (!r.ok) throw new Error("Dataset load failed");
+    const data = await r.json();
+    DATASET = data;
+    buildAutosuggestIndex(data);
+    document.getElementById("uniqueSymptoms").textContent = new Set(data.map(d=>d.Symptom)).size;
+  } catch(e) {
+    console.warn("Dataset unavailable:", e);
+  }
+}
+function buildAutosuggestIndex(data){
+  const set = new Set();
+  data.forEach(r => {
+    const s = (r.Symptom || "").toString().trim();
+    if (s) set.add(s);
+  });
+  autosuggestIndex = Array.from(set).sort();
+}
+
+/* ================= Search logic (client-side if available) ================= */
+async function doSearchQuery(q) {
+  if (!q) return [];
+  q = q.trim().toLowerCase();
+  if (DATASET) {
+    return DATASET.filter(r => (r.Symptom || "").toString().toLowerCase().includes(q));
+  } else {
+    const resp = await fetch(`${SEARCH_ENDPOINT}?q=${encodeURIComponent(q)}`);
+    if (!resp.ok) return [];
+    return await resp.json();
+  }
+}
+
+/* ================= Render results ================= */
+function renderResults(items, q) {
+  const root = document.getElementById("results");
+  root.innerHTML = "";
+  if (!items || items.length === 0) {
+    document.getElementById("resultCount").textContent = `No matches for "${q}"`;
+    return;
+  }
+  document.getElementById("resultCount").textContent = `${items.length} result(s) for "${q}"`;
+
+  root.innerHTML = items.map(item => {
+    const adr = escapeHtml(item["ADRs"] || "");
+    const drug = escapeHtml(item["OTC Drug"] || "");
+    const mode = escapeHtml(item["Mode of Administration"] || "");
+    const time = escapeHtml(item["Time of Administration"] || "");
+    const sym = escapeHtml(item["Symptom"] || "");
+    return `
+      <article class="card">
+        <div class="card-top">
+          <div class="sym">${sym}</div>
+          <div class="badges">
+            ${adr ? `<span class="badge warn">ADRs</span>` : ""}
+            ${drug ? `<span class="badge pill">${drug}</span>` : ""}
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div><strong>OTC Drug</strong>: ${drug || "<span class='muted'>—</span>"}</div>
+          <div><strong>Mode</strong>: ${mode || "<span class='muted'>—</span>"}</div>
+          <div><strong>When</strong>: ${time || "<span class='muted'>—</span>"}</div>
+          ${adr ? `<div class="adr"><strong>ADRs</strong>: ${adr}</div>` : ""}
+        </div>
+
+        <div class="card-actions">
+          <button class="btn small btn-copy" data-sym="${escapeHtml(sym)}">Copy</button>
+          <button class="btn small btn-save" data-sym="${escapeHtml(sym)}">Save</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  // wire up copy/save buttons
+  qSelAll(".btn-copy").forEach(b => b.addEventListener("click", (e) => {
+    const el = e.currentTarget;
+    navigator.clipboard.writeText(el.dataset.sym || "").then(()=> {
+      const old = el.textContent;
+      el.textContent = "Copied!";
+      setTimeout(()=> el.textContent = old, 900);
+    }).catch(()=>{ /* ignore */ });
+  }));
+  qSelAll(".btn-save").forEach(b => b.addEventListener("click", (e) => {
+    const s = e.currentTarget.dataset.sym;
+    addToHistory(s);
+    const old = e.currentTarget.textContent;
+    e.currentTarget.textContent = "Saved";
+    setTimeout(()=> e.currentTarget.textContent = old, 900);
+  }));
+}
+
+/* ================= History (localStorage) ================= */
+const STORAGE_KEY = "symptomlab_history";
+function readStorage(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); }
+  catch(e) { return {}; }
+}
+function writeStorage(obj){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }
+function addToHistory(q) {
+  if (!q) return;
+  const st = readStorage();
+  st.total = (st.total || 0) + 1;
+  st.counts = st.counts || {};
+  st.counts[q] = (st.counts[q] || 0) + 1;
+  st.recent = st.recent || [];
+  st.recent.unshift(q);
+  st.recent = Array.from(new Set(st.recent)).slice(0,12);
+  writeStorage(st);
+  refreshDashboard();
+}
+function clearHistory() { localStorage.removeItem(STORAGE_KEY); refreshDashboard(); }
+
+/* ================= Dashboard & Chart.js ================= */
+let barChart = null;
+function refreshDashboard(){
+  const st = readStorage();
+  const total = st.total || 0;
+  const counts = st.counts || {};
+  const recent = st.recent || [];
+  document.getElementById("totalSearches").textContent = total;
+  document.getElementById("recentList").innerHTML = recent.map(r => `<li><button class="recent-btn">${escapeHtml(r)}</button></li>`).join("") || "<li class='muted'>No recent searches</li>";
+
+  const topEntries = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const labels = topEntries.map(e=>e[0]);
+  const values = topEntries.map(e=>e[1]);
+
+  const ctx = document.getElementById("barChart");
+  if (!ctx) return;
+  if (!barChart) {
+    barChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Searches',
+          data: values,
+          borderRadius: 6,
+          barThickness: 18
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend:{display:false} },
+        scales: {
+          x: { grid:{display:false}, ticks:{autoSkip:true, maxRotation:30} },
+          y: { beginAtZero:true, suggestedMax: Math.max(...values,5) }
+        }
+      }
+    });
+  } else {
+    barChart.data.labels = labels;
+    barChart.data.datasets[0].data = values;
+    barChart.options.scales.y.suggestedMax = Math.max(...values,5);
+    barChart.update();
+  }
+
+  // make recent items clickable
+  qSelAll(".recent-btn").forEach(btn => btn.addEventListener("click", (e) => {
+    const v = e.currentTarget.textContent;
+    qSel("#q").value = v;
+    triggerSearch(v);
+  }));
+}
+
+/* ================= Autosuggest UI ================= */
+const input = qSel("#q");
+const suggestBox = qSel("#autosuggest");
+
+function updateSuggest(q) {
+  if (!q || !autosuggestIndex.length) { suggestBox.classList.add("hidden"); return; }
+  const ql = q.toLowerCase();
+  const picks = autosuggestIndex.filter(s => s.toLowerCase().includes(ql)).slice(0,8);
+  if (!picks.length) { suggestBox.classList.add("hidden"); return; }
+  suggestBox.innerHTML = picks.map(p => `<div class="suggest-item">${escapeHtml(p)}</div>`).join("");
+  suggestBox.classList.remove("hidden");
+  qSelAll(".suggest-item").forEach(it => it.addEventListener("click", (e) => {
+    input.value = e.currentTarget.textContent;
+    suggestBox.classList.add("hidden");
+    triggerSearch(input.value);
+  }));
+}
+
+/* ================= Event binding & debounce ================= */
+let debounceTimer = null;
+input.addEventListener("input", (e) => {
+  const v = e.target.value;
+  updateSuggest(v);
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(()=> triggerSearch(v), 250);
+});
+input.addEventListener("focus", ()=> updateSuggest(input.value));
+document.addEventListener("click", (e)=> {
+  if (!e.target.closest(".search-input-wrap")) suggestBox.classList.add("hidden");
+});
+qSelAll(".tag").forEach(btn => btn.addEventListener("click", (e) => {
+  const v = e.currentTarget.textContent;
+  input.value = v;
+  triggerSearch(v);
+}));
+document.getElementById("clearHistory").addEventListener("click", () => {
+  if (confirm("Clear recent searches?")) clearHistory();
+});
+
+/* ================= Modal helpers (defined defensively later too) ================= */
+function showModalFallback(title, htmlContent) {
+  try {
+    const overlay = qSel("#modalOverlay");
+    const modalTitle = qSel("#modalTitle");
+    const modalBody = qSel("#modalBody");
+    if (modalTitle) modalTitle.textContent = title || "";
+    if (modalBody) modalBody.innerHTML = htmlContent || "";
+    if (overlay) overlay.classList.remove("hidden");
+  } catch(e) {
+    console.error("showModalFallback error:", e);
+  }
+}
+function closeModalFallback() {
+  try {
+    const overlay = qSel("#modalOverlay");
+    const modalBody = qSel("#modalBody");
+    if (overlay) overlay.classList.add("hidden");
+    if (modalBody) modalBody.innerHTML = "";
+  } catch(e) {
+    console.error("closeModalFallback error:", e);
+  }
+}
+
+/* ================= Buttons for totals & unique (use modals) ================= */
+qSel("#totalSearchesBtn").addEventListener("click", () => {
+  const st = readStorage();
+  const total = st.total || 0;
+  const counts = st.counts || {};
+  const recent = st.recent || [];
+  let body = `<p><strong>Total searches:</strong> ${total}</p>`;
+  body += "<h4>Top searches</h4>";
+  if (Object.keys(counts).length === 0) body += "<p class='muted'>No searches yet</p>";
+  else {
+    body += "<ol>" + Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(e=>`<li>${escapeHtml(e[0])} — ${e[1]}</li>`).join("") + "</ol>";
+  }
+  body += "<h4>Recent</h4>";
+  body += "<ul>" + (recent.length ? recent.map(r=>`<li>${escapeHtml(r)}</li>`).join("") : "<li class='muted'>No recent searches</li>") + "</ul>";
+  // use fallback (will be overridden by safer wiring)
+  showModalFallback("Search history & stats", body);
+});
+
+qSel("#uniqueSymptomsBtn").addEventListener("click", () => {
+  if (!DATASET) {
+    showModalFallback("Symptoms", "<p class='muted'>Dataset not loaded</p>");
+    return;
+  }
+  const uniques = Array.from(new Set(DATASET.map(d => d.Symptom).filter(Boolean))).sort();
+  const body = `<p>Total unique symptoms: ${uniques.length}</p><div style="max-height:400px;overflow:auto"><ul>${uniques.map(s=>`<li>${escapeHtml(s)}</li>`).join("")}</ul></div>`;
+  showModalFallback("All symptoms", body);
+});
+
+/* ================= Trigger search and persist history ================= */
+async function triggerSearch(rawQ) {
+  const q = rawQ ? rawQ.trim() : input.value.trim();
+  if (!q) return;
+  document.getElementById("resultCount").textContent = "Searching…";
+  const items = await doSearchQuery(q);
+  renderResults(items, q);
+  addToHistory(q);
+}
+
+/* ================= Defensive initialization & modal wiring ================= */
+window.addEventListener('DOMContentLoaded', () => {
+  try {
+    // Make sure overlay is hidden on start (safety)
+    const overlay = document.getElementById("modalOverlay");
+    if (overlay && !overlay.classList.contains("hidden")) {
+      overlay.classList.add("hidden");
+    }
+
+    // safe selectors
+    const modalClose = document.getElementById("modalClose");
+    const modalOverlay = document.getElementById("modalOverlay");
+    const modal = document.getElementById("modal");
+
+    // wire close button & overlay clicks
+    if (modalClose) modalClose.addEventListener("click", () => closeModalFallback());
+    if (modalOverlay) {
+      modalOverlay.addEventListener("click", (e) => {
+        if (e.target === modalOverlay) closeModalFallback();
+      });
+    }
+    // Escape key closes modal
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModalFallback(); });
+
+    // Expose robust showModal/closeModal functions globally (override fallback)
+    window.showModal = function(title, htmlContent) {
+      try {
+        const modalTitle = document.getElementById("modalTitle");
+        const modalBody = document.getElementById("modalBody");
+        const overlayEl = document.getElementById("modalOverlay");
+        if (modalTitle) modalTitle.textContent = title || "";
+        if (modalBody) modalBody.innerHTML = htmlContent || "";
+        if (overlayEl) overlayEl.classList.remove("hidden");
+        // focus the overlay for accessibility
+        overlayEl?.focus?.();
+      } catch (err) {
+        console.error("showModal error:", err);
+      }
+    };
+    window.closeModal = function() {
+      try {
+        const overlayEl = document.getElementById("modalOverlay");
+        const modalBody = document.getElementById("modalBody");
+        if (overlayEl) overlayEl.classList.add("hidden");
+        if (modalBody) modalBody.innerHTML = "";
+      } catch (err) {
+        console.error("closeModal error:", err);
+      }
+    };
+
+    // Ensure loadDataset and refreshDashboard are called safely
+    (async function safeInit(){
+      try {
+        if (typeof loadDataset === "function") await loadDataset();
+        if (typeof refreshDashboard === "function") refreshDashboard();
+      } catch (err) {
+        // Important: log the error — open DevTools (F12) to inspect
+        console.error("Initialization error:", err);
+        // Keep the UI usable by forcing the overlay hidden
+        if (modalOverlay) modalOverlay.classList.add("hidden");
+      }
+    })();
+
+  } catch (outerErr) {
+    console.error("DOM init error:", outerErr);
+    // final safeguard to make page usable
+    const overlay = document.getElementById("modalOverlay");
+    if (overlay) overlay.classList.add("hidden");
+  }
+});
+
+// global error handler to aid debugging (open DevTools to see messages)
+window.addEventListener('error', (ev) => {
+  console.error("Window error captured:", ev.error || ev.message || ev);
+});
+window.addEventListener('unhandledrejection', (ev) => {
+  console.error("Unhandled promise rejection:", ev.reason || ev);
+});
+</script>
+</body>
+</html>
