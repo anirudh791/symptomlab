@@ -13,7 +13,10 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
   <!-- Your custom styles -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="/static/style.css">
+
+<!-- Make sure any references to the JSON point to /static/ as well -->
+<!-- Example: your JS loads DATA_JSON = "/static/symptoms_data.json" (this is already correct) -->
 
 </head>
 <body>
@@ -464,3 +467,4 @@ window.addEventListener('unhandledrejection', (ev) => {
 </script>
 </body>
 </html>
+
